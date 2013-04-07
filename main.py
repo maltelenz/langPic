@@ -3,6 +3,7 @@ import json
 import base64
 import pickle
 import random
+import os
 
 from auth import user_auth
 
@@ -47,7 +48,30 @@ def save_repo_nr(nr, folder):
     pickle.dump(repo_contents, f)
     f.close()
 
+def roll_up(folder):
+    alldata_file_name = folder + '/all_data'
+
+    all_files = [x for x in os.listdir(folder) if x.isdigit()]
+    try:
+        # load previously saved data
+        data = pickle.load(open(alldata_file_name))
+    except:
+        # no previously saved data, start fresh
+        data = []
+    for fname in all_files:
+        f = open(folder + '/' + fname,'r')
+        data.extend(pickle.load(f))
+
+    alldata_file = open(alldata_file_name, 'w')
+    pickle.dump(data, alldata_file)
+
+    # remove all the rolled up data files
+    for d in all_files:
+        os.remove(folder + '/' + d)
+
+
 
 if __name__=="__main__":
     for i in range(10):
         save_repo_nr(random.randint(1,2000000), 'data')
+    roll_up('data')
