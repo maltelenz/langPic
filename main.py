@@ -6,6 +6,7 @@ import random
 import os
 import re
 import string
+import argparse
 
 from pygments.lexers import guess_lexer_for_filename
 
@@ -116,7 +117,7 @@ def collect_stats(structures):
 def sample(stats, keys):
     rand_max = sum([stats[x] for x in keys])
     if rand_max == 0:
-        return random.sample(stats)[-1]
+        raise Exception("Found nothing to sample")
     offset = random.randint(1, rand_max)
     total = 0
     idx = 0
@@ -128,6 +129,8 @@ def sample(stats, keys):
 
 def generate_file_for_language(folder, lang):
     structures = lang_structures_from_folder(folder, lang)
+    if len(structures) == 0:
+        raise Exception("Found no data for language " + lang)
     stats = collect_stats(structures)
     startkeys = [x for x in stats.keys() if len(x) == 1]
     res = [sample(stats, startkeys)]
@@ -136,6 +139,14 @@ def generate_file_for_language(folder, lang):
     return res
 
 if __name__=="__main__":
-    for i in range(10):
-        save_repo_nr(random.randint(1,2000000), 'data')
-    roll_up('data')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("action", help="fetchdata or generate")
+    parser.add_argument("opt", help="nr or language")
+    args = parser.parse_args()
+
+    if args.action == "fetchdata":
+        for i in range(int(args.opt)):
+            save_repo_nr(random.randint(1,2000000), 'data')
+        roll_up('data')
+    elif args.action == "generate":
+        print generate_file_for_language('data', args.opt)
