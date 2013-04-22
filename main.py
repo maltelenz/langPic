@@ -117,26 +117,47 @@ def collect_stats(structures):
 def sample(stats, keys):
     rand_max = sum([stats[x] for x in keys])
     if rand_max == 0:
-        raise Exception("Found nothing to sample")
+        # no keys valid, assume global likelihood
+        return sample(stats, stats.keys())
     offset = random.randint(1, rand_max)
     total = 0
-    idx = 0
+    idx = -1
     while total < offset:
-        total += stats[keys[idx]]
         idx += 1
-    return keys[idx-1][-1]
+        total += stats[keys[idx]]
+    return keys[idx][-1]
 
-
+def generate_line(stats):
+    startkeys = [x for x in stats.keys() if len(x) == 1]
+    res = [sample(stats, startkeys)]
+    if res[-1] == '\n':
+        return res
+    keys = [x for x in stats.keys() if len(x) == 2 and x[0] == res[0]]
+    res = res + [sample(stats, keys)]
+    if res[-1] == '\n':
+        return res
+    while True:
+        keys = [x for x in stats.keys() if len(x) == 3 and x[0] == res[-2] and x[1] == res[-1]]
+        res = res + [sample(stats, keys)]
+        if res[-1] == '\n':
+            return res
+    
 def generate_file_for_language(folder, lang):
     structures = lang_structures_from_folder(folder, lang)
     if len(structures) == 0:
         raise Exception("Found no data for language " + lang)
     stats = collect_stats(structures)
-    startkeys = [x for x in stats.keys() if len(x) == 1]
-    res = [sample(stats, startkeys)]
-    keys = [x for x in stats.keys() if len(x) == 2 and x[0] == res[0]]
-    res = res + [sample(stats, keys)]
-    return res
+    n_lines = sum([len(x) for x in structures])/len(structures)
+    res = [generate_line(stats) for x in range(n_lines)]
+    resstr = ""
+    for line in res:
+        for tokens in line[:-2]:
+            if tokens == 0:
+                resstr += " "
+            else:
+                resstr += " " + ('X' * tokens)
+        resstr += "\n"
+    return resstr
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
