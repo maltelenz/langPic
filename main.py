@@ -4,6 +4,11 @@ import base64
 import pickle
 import random
 import os
+import re
+import string
+
+from pygments.lexers import guess_lexer_for_filename
+
 
 from auth import user_auth
 
@@ -70,6 +75,65 @@ def roll_up(folder):
         os.remove(folder + '/' + d)
 
 
+def language(blob):
+    try:
+        return guess_lexer_for_filename(blob[0]['path'],blob[1]).name
+    except Exception:
+        return 'Unknown'
+
+def get_structure(lang_str):
+    new_str = re.sub(r'\t','    ',re.sub(r'\S','X',lang_str))
+    newline_str = string.split(new_str,"\n")
+    return [map(len, string.split(x," ")) for x in newline_str]
+
+def all_structures_from_folder(folder):
+    alldata_file_name = folder + '/all_data'
+    data = pickle.load(open(alldata_file_name))
+    structures = [get_structure(x[1]) for x in data]
+    return structures
+
+def lang_structures_from_folder(folder, lang):
+    alldata_file_name = folder + '/all_data'
+    data = pickle.load(open(alldata_file_name))
+    structures = [get_structure(x[1]) for x in data if language(x) == lang]
+    return structures
+
+def collect_stats(structures):
+    likelihoods = {}
+    for struct in structures:
+        for line in struct:
+            for start in range(0, len(line)):
+                try:
+                    likelihoods[tuple(line[max(0, start - 3):start])] += 1
+                except KeyError:
+                    likelihoods[tuple(line[max(0, start - 3):start])] = 1
+            try:
+                likelihoods[tuple(line[-2:] + ['\n'])] += 1
+            except KeyError:
+                likelihoods[tuple(line[-2:] + ['\n'])] = 1
+    return likelihoods
+
+def sample(stats, keys):
+    rand_max = sum([stats[x] for x in keys])
+    if rand_max == 0:
+        return random.sample(stats)[-1]
+    offset = random.randint(1, rand_max)
+    total = 0
+    idx = 0
+    while total < offset:
+        total += stats[keys[idx]]
+        idx += 1
+    return keys[idx-1][-1]
+
+
+def generate_file_for_language(folder, lang):
+    structures = lang_structures_from_folder(folder, lang)
+    stats = collect_stats(structures)
+    startkeys = [x for x in stats.keys() if len(x) == 1]
+    res = [sample(stats, startkeys)]
+    keys = [x for x in stats.keys() if len(x) == 2 and x[0] == res[0]]
+    res = res + [sample(stats, keys)]
+    return res
 
 if __name__=="__main__":
     for i in range(10):
