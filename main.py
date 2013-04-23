@@ -7,6 +7,8 @@ import os
 import re
 import string
 import argparse
+import collections
+import itertools
 
 from pygments.lexers import guess_lexer_for_filename
 
@@ -82,10 +84,18 @@ def language(blob):
     except Exception:
         return 'Unknown'
 
+def language_count_from_folder(folder):
+    alldata_file_name = folder + '/all_data'
+    data = pickle.load(open(alldata_file_name))
+    langs = [language(x) for x in data]
+    c = collections.Counter(langs)
+    return dict(c)
+
 def get_structure(lang_str):
     new_str = re.sub(r'\t','    ',re.sub(r'\S','X',lang_str))
     newline_str = string.split(new_str,"\n")
-    return [map(len, string.split(x," ")) for x in newline_str]
+    lines = [map(len, string.split(x," ")) + [-1] for x in newline_str]
+    return list(itertools.chain.from_iterable(lines)) + [-2]
 
 def all_structures_from_folder(folder):
     alldata_file_name = folder + '/all_data'
@@ -102,23 +112,19 @@ def lang_structures_from_folder(folder, lang):
 def collect_stats(structures):
     likelihoods = {}
     for struct in structures:
-        for line in struct:
-            for start in range(0, len(line)):
-                try:
-                    likelihoods[tuple(line[max(0, start - 3):start])] += 1
-                except KeyError:
-                    likelihoods[tuple(line[max(0, start - 3):start])] = 1
+        for start in range(0, len(struct) + 1):
             try:
-                likelihoods[tuple(line[-2:] + ['\n'])] += 1
+                likelihoods[tuple(struct[max(0, start - 3):start])] += 1
             except KeyError:
-                likelihoods[tuple(line[-2:] + ['\n'])] = 1
+                likelihoods[tuple(struct[max(0, start - 3):start])] = 1
+    del likelihoods[()]
     return likelihoods
 
 def sample(stats, keys):
     rand_max = sum([stats[x] for x in keys])
     if rand_max == 0:
         # no keys valid, assume global likelihood
-        return sample(stats, stats.keys())
+        return -2
     offset = random.randint(1, rand_max)
     total = 0
     idx = -1
@@ -127,36 +133,32 @@ def sample(stats, keys):
         total += stats[keys[idx]]
     return keys[idx][-1]
 
-def generate_line(stats):
-    startkeys = [x for x in stats.keys() if len(x) == 1]
-    res = [sample(stats, startkeys)]
-    if res[-1] == '\n':
-        return res
-    keys = [x for x in stats.keys() if len(x) == 2 and x[0] == res[0]]
-    res = res + [sample(stats, keys)]
-    if res[-1] == '\n':
-        return res
-    while True:
-        keys = [x for x in stats.keys() if len(x) == 3 and x[0] == res[-2] and x[1] == res[-1]]
-        res = res + [sample(stats, keys)]
-        if res[-1] == '\n':
-            return res
+
+def generate_next(stats, history):
+    if history != []:
+        keys = [x for x in stats.keys() if x[-(len(history) + 1):-1] == tuple(history)]
+    else:
+        keys = [x for x in stats.keys() if len(x) == 1]
+    res = [sample(stats, keys)]
+    return res
     
 def generate_file_for_language(folder, lang):
     structures = lang_structures_from_folder(folder, lang)
     if len(structures) == 0:
         raise Exception("Found no data for language " + lang)
     stats = collect_stats(structures)
-    n_lines = sum([len(x) for x in structures])/len(structures)
-    res = [generate_line(stats) for x in range(n_lines)]
+    res = []
+    while res == [] or res[-1] != -2:
+        res = res + generate_next(stats, res[-2:])
+        print len(res)
     resstr = ""
-    for line in res:
-        for tokens in line[:-2]:
-            if tokens == 0:
-                resstr += " "
-            else:
-                resstr += " " + ('X' * tokens)
-        resstr += "\n"
+    for token in res[:-1]:
+        if token == 0:
+            resstr += " "
+        elif token == -1:
+            resstr += "\n"
+        else:
+            resstr += " " + ('X' * token)
     return resstr
 
 if __name__=="__main__":
@@ -171,3 +173,5 @@ if __name__=="__main__":
         roll_up('data')
     elif args.action == "generate":
         print generate_file_for_language('data', args.opt)
+    elif args.action == "langcount":
+        print language_count_from_folder('data')
