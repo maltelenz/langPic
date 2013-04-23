@@ -15,6 +15,8 @@ from pygments.lexers import guess_lexer_for_filename
 
 from auth import user_auth
 
+HISTORY_SIZE = 20
+
 def get_blob(url):
     r = requests.get(url, auth = user_auth)
     if r.ok:
@@ -114,9 +116,9 @@ def collect_stats(structures):
     for struct in structures:
         for start in range(0, len(struct) + 1):
             try:
-                likelihoods[tuple(struct[max(0, start - 3):start])] += 1
+                likelihoods[tuple(struct[max(0, start - HISTORY_SIZE):start])] += 1
             except KeyError:
-                likelihoods[tuple(struct[max(0, start - 3):start])] = 1
+                likelihoods[tuple(struct[max(0, start - HISTORY_SIZE):start])] = 1
     del likelihoods[()]
     return likelihoods
 
